@@ -30,14 +30,6 @@ let SISTERS = [
   'https://pic2.zhimg.com/v2-1008cd2c72129809cc348cdc04310475_r.jpg',
 ]
 
-let pageSize = 2
-function getSisters(page) {
-  var start = (page - 1) * pageSize
-  var end = page * pageSize
-  var sisters = SISTERS.slice(start, end)
-  return sisters
-}
-
 let initialSize = 8
 let randomSize = [1, 3, 5, 7]
 function getSisterGenerator() {
