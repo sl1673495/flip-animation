@@ -3,7 +3,6 @@ let preload = (imgs) => {
     const length = imgs.length
     let count = 0
     const load = (src) => {
-      console.log('src: ', src);
       let img = new Image()
       const checkIfFinished = () => {
         count++
