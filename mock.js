@@ -31,9 +31,9 @@ let SISTERS = [
 ]
 
 let initialSize = 8
-let randomSize = [1, 3, 5, 7]
+let randomSize = [1, 2, 3, 4]
+
 function getSisterGenerator() {
-  const randomSize = [1, 2, 3, 4]
   const source = SISTERS.slice()
   let initial = true
   return () => {
@@ -41,8 +41,7 @@ function getSisterGenerator() {
       initial = false
       return source.splice(0, initialSize)
     }
-    const size = Math.ceil(Math.random() * (randomSize.length - 1))
-    console.log('size: ', size);
-    return source.splice(0, size)
+    const size = Math.round(Math.random() * (randomSize.length - 1))
+    return source.splice(0, randomSize[size])
   }
 }
