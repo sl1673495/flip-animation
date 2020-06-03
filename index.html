@@ -17,8 +17,13 @@
         margin: auto;
       }
 
+      .loading {
+        margin: 12px;
+        text-align: center;
+      }
+
       .action {
-        padding: 12px;
+        margin: 12px;
         text-align: center;
       }
 
@@ -46,15 +51,20 @@
         border-radius: 8px;
         object-fit: cover;
       }
+
+      [v-cloak] {
+        display: none;
+      }
     </style>
   </head>
   <body>
-    <div id="app">
+    <div id="app" v-cloak>
       <div class="action">
         <button @click="add">追加图片</button>
         <button @click="reset">重置</button>
       </div>
-      <div class="wrap">
+      <div v-if="loading" class="loading">正在加载图片……</div>
+      <div v-else class="wrap">
         <div class="img-wrap" v-for="src in imgs" :key="src">
           <img ref="imgs" class="img" :key="src" :src="src" />
         </div>
@@ -69,13 +79,21 @@
         el: "#app",
         data() {
           return {
+            loading: false,
             getSister: initialGetSister,
-            imgs: initialGetSister(),
+            imgs: [],
             imgHeights: [],
             imgsLoaded: false,
             leftImgIndexes: [],
             rightImgIndexes: [],
           }
+        },
+        async created() {
+          this.loading = true
+          const imgs = this.getSister()
+          await preload(imgs)
+          this.imgs = imgs
+          this.loading = false
         },
         methods: {
           async add() {
