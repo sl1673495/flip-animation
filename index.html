@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="referrer" content="never" />
+    <title>Document</title>
+    <style>
+      * {
+        margin: 0;
+        box-sizing: border-box;
+        padding: 0;
+      }
+
+      body {
+        max-width: 500px;
+        margin: auto;
+      }
+
+      .action {
+        padding: 12px;
+        text-align: center;
+      }
+
+      .link {
+        display: block;
+        padding: 8px;
+        text-align: center;
+        color: red;
+      }
+
+      .wrap {
+        display: flex;
+        flex-wrap: wrap;
+        column-count: 4;
+      }
+
+      .img-wrap {
+        width: 25%;
+        padding: 8px;
+      }
+
+      .img {
+        width: 100%;
+        height: 200px;
+        border-radius: 8px;
+        object-fit: cover;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <div class="action">
+        <button @click="add">追加图片</button>
+        <button @click="reset">重置</button>
+      </div>
+      <div class="wrap">
+        <div class="img-wrap" v-for="src in imgs" :key="src">
+          <img ref="imgs" class="img" :key="src" :src="src" />
+        </div>
+      </div>
+    </div>
+    <script src="./vue.js"></script>
+    <script src="./mock.js"></script>
+    <script src="./util.js"></script>
+    <script>
+      let initialGetSister = getSisterGenerator()
+      new Vue({
+        el: "#app",
+        data() {
+          return {
+            getSister: initialGetSister,
+            imgs: initialGetSister(),
+            imgHeights: [],
+            imgsLoaded: false,
+            leftImgIndexes: [],
+            rightImgIndexes: [],
+          }
+        },
+        methods: {
+          async add() {
+            const newData = this.getSister()
+            await preload(newData)
+
+            const prevImgs = this.$refs.imgs.slice()
+            const prevPositions = getRects(prevImgs)
+
+            this.imgs = newData.concat(this.imgs)
+
+            this.$nextTick(() => {
+              const currentPositions = getRects(prevImgs)
+
+              prevImgs.forEach((imgRef, imgIndex) => {
+                const currentPosition = currentPositions[imgIndex]
+                const prevPosition = prevPositions[imgIndex]
+
+                const invert = {
+                  left: prevPosition.left - currentPosition.left,
+                  top: prevPosition.top - currentPosition.top,
+                }
+
+                const keyframes = [
+                  {
+                    transform: `translate(${invert.left}px, ${invert.top}px)`,
+                  },
+                  { transform: "translate(0)" },
+                ]
+
+                const options = {
+                  duration: 300,
+                  easing: "cubic-bezier(0,0,0.32,1)",
+                }
+
+                const animation = imgRef.animate(keyframes, options)
+              })
+            })
+          },
+          reset() {
+            this.getSister = getSisterGenerator()
+            this.imgs = this.getSister()
+          },
+        },
+      })
+
+      function getRects(doms) {
+        return doms.map((dom) => {
+          const rect = dom.getBoundingClientRect()
+          const { left, top } = rect
+          return { left, top }
+        })
+      }
+    </script>
+  </body>
+</html>
