@@ -1,337 +1,216 @@
 ## 前言
 
-瀑布流布局是前端领域中一个很常见的需求，由于图片的高度是不一致的，所以在多列布局中默认布局下很难获得满意的排列。
+在 Vue 的官网中的过渡动画章节中，可以看到一个很酷炫的[动画效果](https://cn.vuejs.org/v2/guide/transitions.html#%E5%88%97%E8%A1%A8%E7%9A%84%E6%8E%92%E5%BA%8F%E8%BF%87%E6%B8%A1)
 
-我们的需求是，图片高度不规律的情况下，在两列布局中，让左右两侧的图片总高度尽可能的接近，这样的布局会非常的美观。
+![](https://user-gold-cdn.xitu.io/2020/6/3/1727890a0a2d9845?w=706&h=682&f=gif&s=1928105)
 
-注意，**本文的目的仅仅是讨论算法在前端中能如何运用**，而不是说瀑布流的最佳解法是动态规划，可以仅仅当做学习拓展来看。
+乍一看，让我们手写出这个逻辑应该是非常复杂的。但是文档里我们发现一个名词：`FLIP`，这给了我们一个线索，是不是用这个玩意就可以写出这个动画呢？
 
-本文的图片节选自知乎问题[《有个漂亮女朋友是种怎样的体验？》](https://www.zhihu.com/question/28997505)，我先去看美女了，本文到此结束。（逃
+答案是肯定的，顺着这个线索找到 `Aerotwist` 社区里的一篇文章：[flip-your-animations](https://aerotwist.com/blog/flip-your-animations/)，以这篇文章为切入点，一步步来实现一个类似的效果。
+
+图片素材依然引用自知乎问题[《有个漂亮女朋友是种怎样的体验？》](https://www.zhihu.com/question/28997505)，侵删。
 
 ## 预览
 
-![](https://user-gold-cdn.xitu.io/2020/6/2/17272def722a4f89?w=628&h=1138&f=png&s=1612372)
+先来看看本文想要实现的最终效果是什么样吧：
 
-## 分析
+![](https://user-gold-cdn.xitu.io/2020/6/3/17278961a474678c?w=500&h=679&f=gif&s=4061003)
 
-从预览图中可以看出，虽然图片的高度是不定的，但是到了这个布局的最底部，左右两张图片是正好对齐的，这就是一个比较美观的布局了。
+也可以直接进预览网址里看：
 
-那么怎么实现这个需求呢？从头开始拆解，现在我们能拿到一组图片数组 `[img1, img2, img3]`，我们可以通过一些方法得到它对应的高度 `[1000, 2000, 3000]`，那么现在我们的目标就是能够计算出左右两列 `left: [1000, 2000]` 和 `right: [3000]` 这样就可以把一个左右等高的布局给渲染出来了。
+http://sl1673495.gitee.io/flip-animation
 
-## 准备工作
+## FLIP
 
-首先准备好小姐姐数组 `SISTERS`：
+`FLIP` 究竟是什么东西呢？先看下它的定义，
 
-```js
-let SISTERS = [
-  'https://pic3.zhimg.com/v2-89735fee10045d51693f1f74369aaa46_r.jpg',
-  'https://pic1.zhimg.com/v2-ca51a8ce18f507b2502c4d495a217fa0_r.jpg',
-  'https://pic1.zhimg.com/v2-c90799771ed8469608f326698113e34c_r.jpg',
-  'https://pic1.zhimg.com/v2-8d3dd83f3a419964687a028de653f8d8_r.jpg',
-  ... more 50 items
-]
-```
+### First
 
-准备好一个工具方法 `loadImages`，这个方法的目的就是把所有图片预加载以后获取对应的高度，放到一个数组里返回。并且要对外通知所有图片处理完成的时机，有点类似于 `Promise.all` 的思路。
+即将做动画的元素的初始状态（比如位置、透明度等等）。
 
-这个方法里，我们把图片按照 `宽高比` 和屏幕宽度的一半进行相乘，得到缩放后适配屏宽的图片高度。
+### Last
 
-```js
-let loadImgHeights = (imgs) => {
-  return new Promise((resolve, reject) => {
-    const length = imgs.length
-    const heights = []
-    let count = 0
-    const load = (index) => {
-      let img = new Image()
-      const checkIfFinished = () => {
-        count++
-        if (count === length) {
-          resolve(heights)
-        }
-      }
-      img.onload = () => {
-        const ratio = img.height / img.width
-        const halfHeight = ratio * halfInnerWidth
-        // 高度按屏幕一半的比例来计算
-        heights[index] = halfHeight
-        checkIfFinished()
-      }
-      img.onerror = () => {
-        heights[index] = 0
-        checkIfFinished()
-      }
-      img.src = imgs[index]
-    }
-    imgs.forEach((img, index) => load(index))
-  })
-}
-```
+即将做动画的元素的最终状态。
 
-有了图片高度以后，我们就开始挑选适合这个需求的算法了。
+### Invert
 
-## 贪心算法
+这一步比较关键，假设我们图片的初始位置是 `左: 0, 上：0`，元素动画后的最终位置是 `左：100, 上100`，那么很明显这个元素是向右下角运动了 `100px`。
 
-在人的脑海中最直观的想法是什么样的？在每装一个图片前都对比一下左右数组的高度和，往高度较小的那个数组里去放入下一项。
+**但是**，此时我们不按照常规思维去先计算它的最终位置，然后再命令元素从 `0, 0` 运动到 `100, 100`，而是**先让元素自己移动过去**（比如在 Vue 中用数据来驱动，在数组前面追加几个图片，之前的图片就自己移动到下面去了）。
 
-这就是贪心算法，我们来简单实现下：
+这里有一个关键的知识点要注意了，也是我在之前的文章[《深入解析你不知道的 EventLoop 和浏览器渲染、帧动画、空闲回调》](https://juejin.im/post/5ec73026f265da76da29cb25)中提到过的：
 
-```js
-let greedy = (heights) => {
-  let mid = Math.round(sum(heights) / 2)
-  let total = 0
-  let leftHeights = []
-  let rightHeights = []
-  let left = []
-  let right = []
+DOM 元素属性的改变（比如 `left`、`right`、 `transform` 等等），会被集中起来延迟到浏览器的下一帧统一渲染，所以我们可以得到一个这样的时间点：**DOM 状态改变了，而浏览器还没渲染**。
 
-  heights.forEach((height, index) => {
-    if (sum(leftHeights) > sum(rightHeights)) {
-      right.push(index)
-      rightHeights.push(height)
-    } else {
-      left.push(index)
-      leftHeights.push(height)
-    }
-    total += height
-  })
+有了这个前置条件，我们就可以保证先让 Vue 去操作 DOM 变更，此时浏览器还未渲染，我们已经能得到 DOM 状态变更后的位置了。
 
-  return { left, right }
-}
-```
+说的具体点，假设我们的图片是一行两个排列，图片数组初始化的状态是 `[img1, img2`，此时我们往数组头部追加两个元素 `[img3, img4, img1, img2]`，那么 `img1` 和 `img2` 就自然而然的被挤到下一行去了。
 
-我们得到了 `left`，`right` 数组，对应左右两列渲染图片的下标，并且我们也有了每个图片的高度，那么渲染到页面上就很简单了：
+假设 `img1` 的初始位置是 `0, 0`，被数据驱动导致的 DOM 改变挤下去后的位置是 `100, 100`，那么此时浏览器还没有渲染，我们可以在这个时间点把 `img1.style.transform = translate(-100px, -100px)`，让它 先 **Invert** 倒置回位移前的位置。
+
+### Play
+
+倒置了以后，想要让它做动画就很简单了，再让它回到 `0, 0` 的位置即可，本文会采用最新的 `Web Animation API` 来实现最后的 `Play`。
+
+[MDN 文档：Web Animation](https://developer.mozilla.org/zh-CN/docs/Web/API/Animation)
+
+## 实现
+
+首先图片渲染很简单，就让图片通过 `column-count: 4` 简单的排成 4 列即可
 
 ```xml
-<div class="wrap" v-if="imgsLoaded">
-  <div class="half">
-    <img
-      class="img"
-      v-for="leftIndex in leftImgIndexes"
-      :src="imgs[leftIndex]"
-      :style="{ width: '100%', height: imgHeights[leftIndex] + 'px' }"
-    />
-  </div>
-  <div class="half">
-    <img
-      class="img"
-      v-for="rightIndex in rightImgIndexes"
-      :src="imgs[rightIndex]"
-      :style="{ width: '100%', height: imgHeights[rightIndex] + 'px' }"
-    />
+.wrap {
+  display: flex;
+  flex-wrap: wrap;
+  column-count: 4;
+}
+
+<div v-else class="wrap">
+  <div class="img-wrap" v-for="src in imgs" :key="src">
+    <img ref="imgs" class="img" :src="src" />
   </div>
 </div>
 ```
 
-效果如图：
-![](https://user-gold-cdn.xitu.io/2020/6/2/17272ec94dcda26a?w=640&h=1138&f=png&s=1692813)
+那么关键点就在于怎么往这个 `imgs` 数组里追加元素后，做一个流畅的路径动画。
 
-预览地址：
-https://sl1673495.github.io/dp-waterfall/greedy.html
-
-可以看出，贪心算法只寻求局部最优解（只在考虑当前图片的时候找到一个最优解），所以最后左右两边的高度差还是相对较大的，局部最优解很难成为全局最优解。
-
-再回到文章开头的图片去看看，对于同样的一个图片数组，那个预览图里的高度差非常的小，是怎么做到的呢？
-
-## 动态规划
-
-和局部最优解对应的是全局最优解，而说到全局最优解，我们很难不想到动态规划这种算法。它是求全局最优解的一个利器。
-
-如果你还没有了解过动态规划，建议你看一下海蓝大佬的 [一文搞懂动态规划](https://juejin.im/post/5e86d0ad6fb9a03c387f3342)，也是这篇文章让我入门了最基础的动态规划。
-
-动态规划中有一个很著名的问题：「01 背包问题」，题目的意思是这样的：
-
-**有 n 个物品，它们有各自的体积和价值，现有给定容量的背包，如何让背包里装入的物品具有最大的价值总和？**
-
-关于 01 背包问题的题解，网上不错的教程似乎不多，我推荐看慕课网 bobo 老师的[玩转算法面试 从真题到思维全面提升算法思维](https://coding.imooc.com/class/82.html) 中的第九章，会很仔细的讲解背包问题，对于算法思维有很大的提升，这门课的其他部分也非常非常的优秀。
-
-我也有在我自己维护的题解仓库中对老师的 01 背包解法做了一个[js 版的改写](https://github.com/sl1673495/leetcode-javascript/issues/15)。
-
-那么 01 背包问题和这个瀑布流算法有什么关系呢？这个思路确实比较难找，但是我们仔细想一下，假设我们有 `[1, 2, 3]` 这 3 个图片高度的数组，我们怎么通过转化成 01 背包问题呢？
-
-由于我们要凑到的是图片总高度的一半，也就是 `(1 + 2 + 3) / 2 = 3`，那么我们此时就有了一个 `容量为3` 的背包，而由于我们装进左列中的图片高度需要低于总高度的一半，待装进背包的物体的总重量和高度是相同的 `[1, 2, 3]`。
-
-那么这个问题也就转化为了，在 `容量为3的背包` 中，尽可能的从重量为 `[1, 2, 3]`，并且价值也为 `[1, 2, 3]` 的物品中，尽可能的挑选出总价值最大的物品集合装进背包中。
-
-也就是 `总高度为3`，在 `[1, 2, 3]` 这几种高度的图片中，尽可能挑出 `总和最大，但是又小于3` 的图片集合，装进数组中。
-
-### 二维数组结构
-
-我们构建的二维 dp 数组
-
-**纵坐标 y** 是：当前可以考虑的图片，比如 `dp[0]` 是只考虑下标为 0 的图片，`dp[1]` 是考虑下标为 0 的图片，并且考虑下标为 1 的图片，以此类推，取值范围是 `0 ~ 图片数组的长度 - 1`。
-
-**横坐标 x** 是：用当前考虑的图片集合，去尽可能凑到总高度为 `y` 时，所能凑成的最大高度 `max`，以及当前所使用的图片下标集合 `indexes`，取值范围是 `0 ~ 高度的一半`。
-
-### 小问题拆解
-
-就以 `[1, 4, 5, 4]` 这四张图片高度为例，高度的一半是 7，用肉眼可以看出最接近 7 的子数组是`[1, 5]`，我们来看看动态规划是怎么求出这个结果的。
-
-我们先看纵坐标为 `0`，也就是只考虑图片 1 的情况：
-
-1. 首先去尝试凑高度 `1`：我们知道图片 1 的高度正好是 1，所以此时`dp[0][0]`所填写的值是 `{ max: 1, indexes: [0] }`，也就代表用总高度还剩 1，并且只考虑图片 1 的情况下，我们的最优解是选用第一张图片。
-
-2. 凑高度`2 ~ 7`：由于当前只有 1 可以选择，所以最优解只能是选择第一张图片，它们都是 `{ max: 1, indexes: [0] }`。
-
-```
-高度       1  2  3  4  5  6  7
-图片1(h=1) 1  1  1  1  1  1  1
-```
-
-这一层在动态规划中叫做基础状态，它是最小的子问题，它不像后面的纵坐标中要考虑多张图片，而是只考虑单张图片，所以一般来说都会在一层循环中单独把它求解出来。
-
-这里我们还要考虑第一张图片的高度大于我们要求的总高度的情况，这种情况下需要把 max 置为 0，选择的图片项也为空。
+我们来实现追加图片的方法 `add`：
 
 ```js
-let mid = Math.round(sum(heights) / 2)
-let dp = []
-// 基础状态 只考虑第一个图片的情况
-dp[0] = []
-for (let cap = 0; cap <= mid; cap++) {
-  dp[0][cap] =
-    heights[0] > cap
-      ? { max: 0, indexes: [] }
-      : { max: heights[0], indexes: [0] }
+async add() {
+  const newData = this.getSister()
+  await preload(newData)
 }
 ```
 
-有了第一层的基础状态后，我们就可以开始考虑多张图片的情况了，现在来到了纵坐标为 1，也就是考虑图片 1 和考虑图片 2 时求最优解：
-
-```
-高度       1  2  3  4  5  6  7
-图片1(h=1) 1  1  1  1  1  1  1
-图片2(h=2)
-```
-
-此时问题就变的有些复杂了，在多张图片的情况下，我们可以有两种选择：
-
-1. 选择当前图片，那么假设当前要凑的总高度为 3，当前图片的高度为 2，剩余的高度就为 1，此时我们可以用剩余的高度去「上一个纵坐标」里寻找「只考虑前面几种图片」的情况下，高度为 1 时的最优解。并且记录 `当前图片的高度 + 前几种图片凑剩余高度的最优解` 为 `max1`。
-2. 不选择当前图片，那么就直接去「只考虑前面几种图片」的上一个纵坐标里，找到当前高度下的最优解即可，记为 `max2`。
-3. 比较 `max1` 和`max2`，找出更大的那个值，记录为当前状态下的最优解。
-
-有了这个前置知识，来继续分解这个问题，在纵坐标为 1 的情况下，我们手上可以选择的图片有图片 1 和图片 2：
-
-1. 凑高度 1：由于图片 2 的高度为 2，相当于是容量超了，所以这种情况下不选择图片 2，而是直接选择图片 1，所以 `dp[1][0]` 可以直接沿用 `dp[0][0]`的最优解，也就是 `{ max: 1, indexes: [0] }`。
-2. 凑高度 2：
-   1. 选择图片 2，图片 2 的高度为 4，能够凑成的高度为 4，已经超出了当前要凑的高度 2，所以不能选则图片 2。
-   2. 不选择图片 2，在只考虑图片 1 时的最优解数组 `dp[0]` 中找到高度为 2 时的最优解： `dp[0][2]`，直接沿用下来，也就是 `{ max: 1, indexes: [0] }`
-   3. 这种情况下只能不选择图片 2，而沿用只选择图片 1 时的解， `{ max: 1, indexes: [0] }`
-3. 省略凑高度 `3 ~ 4` 的情况，因为得出的结果和凑高度 2 是一样的。
-4. 凑高度 5：高度为 5 的情况下就比较有意思了：
-   1. 选择图片 2，图片 2 的高度为 4，能够凑成的高度为 4，此时剩余高度是 1，再去只考虑图片 1 的最优解数组 `dp[0]`中找高度为 1 时的最优解`dp[0][1]`，发现结果是 `{ max: 1, indexes: [0] }`，这两个高度值 4 和 1 相加后没有超出高度的限制，所以得出最优解：`{ max: 5, indexes: [0, 1] }`
-   2. 不选择图片 2，在图片 1 的最优解数组中找到高度为 5 时的最优解： `dp[0][5]`，直接沿用下来，也就是 `{ max: 1, indexes: [0] }`
-   3. 很明显选择图片 2 的情况下，能凑成的高度更大，所以 `dp[1][2]` 的最优解选择 `{ max: 5, indexes: [0, 1] }`
-
-仔细理解一下，相信你可以看出动态规划的过程，从最小的子问题 `只考虑图片1`出发，先求出最优解，然后再用子问题的最优解去推更大的问题 `考虑图片1、2`、`考虑图片1、2、3`的最优解。
-
-画一下`[1,4,5,4]`问题的 dp 状态表吧：
-
-![](https://user-gold-cdn.xitu.io/2020/6/2/1727328d6aacdcef?w=1644&h=214&f=png&s=25629)
-
-可以看到，和我们刚刚推论的结果一致，在考虑图片 1 和图片 2 的情况下，凑高度为 5，也就是`dp[1][5]`的位置的最优解就是 5。最右下角的 `dp[3][7]` 就是考虑所有图片的情况下，凑高度为 7 时的**全局最优解**。
-
-给出代码：
+首先随机的取出几张图片，利用 `new Image` 进行预加载防止图片空白，然后我们计算当前旧图片的位置：
 
 ```js
-// 尽可能选出图片中高度最接近图片总高度一半的元素
-let dpHalf = (heights) => {
-  let mid = Math.round(sum(heights) / 2)
-  let dp = []
+function getRects(doms) {
+  return doms.map((dom) => {
+    const rect = dom.getBoundingClientRect()
+    const { left, top } = rect
+    return { left, top }
+  })
+}
 
-  // 基础状态 只考虑第一个图片的情况
-  dp[0] = []
-  for (let cap = 0; cap <= mid; cap++) {
-    dp[0][cap] =
-      heights[0] > cap
-        ? { max: 0, indexes: [] }
-        : { max: heights[0], indexes: [0] }
+// 当前已有的图片
+const prevImgs = this.$refs.imgs.slice()
+const prevPositions = getRects(prevImgs)
+```
+
+记录完图片的旧位置后，就可以向数组里追加新的图片了
+
+```js
+this.imgs = newData.concat(this.imgs)
+```
+
+随后就是比较关键的点了，我们知道 Vue 是异步渲染的，也就是改变了这个 `imgs` 数组后不会立刻发生 DOM 的变动，此时我们要用到 `nextTick` 这个 API，这个 API 把你传入的回调函数放进了 `microTask` 队列，正如上文提到的事件循环的文章里所说，`microTask`队列的执行一定发生在浏览器重新渲染前。
+
+由于先调用了 `this.imgs = newData.concat(this.imgs)` 这段代码，触发了 Vue 的响应式依赖更新，此时 Vue 内部会把本次 DOM 更新的渲染函数先放到 `microTask`队列中，此时的队列是`[changeDOM]`。
+
+调用了 `nextTick(callback)` 后，这个`callback`函数也会被追加到队列中，此时的队列是 `[changeDOM, callback]`。
+
+这下聪明的你肯定就明白了，为什么 `nextTick`的回调函数里一定能获取到最新的 DOM 状态。
+
+由于我们之前保存了图片元素节点的数组 `prevImgs`，所以在 `nextTick` 里调用同样的 `getRect` 方法获取到的就是旧图片的最新位置了。
+
+```js
+async add() {
+  // 最新 DOM 状态
+  this.$nextTick(() => {
+    // 再调用同样的方法获取最新的元素位置
+    const currentPositions = getRects(prevImgs)
+},
+```
+
+此时我们已经拥有了 `Invert` 步骤的关键信息，新位置和旧位置，那么接下来就很简单了，把图片数组循环做一个倒置后 `Play`的动画即可。
+
+```js
+prevImgs.forEach((imgRef, imgIndex) => {
+  const currentPosition = currentPositions[imgIndex]
+  const prevPosition = prevPositions[imgIndex]
+
+  // 倒置后的位置，虽然图片移动到最新位置了，但你先给我回去，等着我来让你做动画。
+  const invert = {
+    left: prevPosition.left - currentPosition.left,
+    top: prevPosition.top - currentPosition.top,
   }
 
-  for (
-    let useHeightIndex = 1;
-    useHeightIndex < heights.length;
-    useHeightIndex++
-  ) {
-    if (!dp[useHeightIndex]) {
-      dp[useHeightIndex] = []
-    }
-    for (let cap = 0; cap <= mid; cap++) {
-      let usePrevHeightDp = dp[useHeightIndex - 1][cap]
-      let usePrevHeightMax = usePrevHeightDp.max
-      let currentHeight = heights[useHeightIndex]
-      // 这里有个小坑 剩余高度一定要转化为整数 否则去dp数组里取到的就是undefined了
-      let useThisHeightRestCap = Math.round(cap - heights[useHeightIndex])
-      let useThisHeightPrevDp = dp[useHeightIndex - 1][useThisHeightRestCap]
-      let useThisHeightMax = useThisHeightPrevDp
-        ? currentHeight + useThisHeightPrevDp.max
-        : 0
+  const keyframes = [
+    // 初始位置是倒置后的位置
+    {
+      transform: `translate(${invert.left}px, ${invert.top}px)`,
+    },
+    // 图片更新后本来应该在的位置
+    { transform: "translate(0)" },
+  ]
 
-      // 是否把当前图片纳入选择 如果取当前的图片大于不取当前图片的高度
-      if (useThisHeightMax > usePrevHeightMax) {
-        dp[useHeightIndex][cap] = {
-          max: useThisHeightMax,
-          indexes: useThisHeightPrevDp.indexes.concat(useHeightIndex),
-        }
-      } else {
-        dp[useHeightIndex][cap] = {
-          max: usePrevHeightMax,
-          indexes: usePrevHeightDp.indexes,
-        }
+  const options = {
+    duration: 300,
+    easing: "cubic-bezier(0,0,0.32,1)",
+  }
+
+  const animation = imgRef.animate(keyframes, options)
+})
+```
+
+此时一个非常流畅的路径动画效果就完成了。
+
+完整实现如下：
+
+```js
+async add() {
+  const newData = this.getSister()
+  await preload(newData)
+
+  const prevImgs = this.$refs.imgs.slice()
+  const prevPositions = getRects(prevImgs)
+
+  this.imgs = newData.concat(this.imgs)
+
+  this.$nextTick(() => {
+    const currentPositions = getRects(prevImgs)
+
+    prevImgs.forEach((imgRef, imgIndex) => {
+      const currentPosition = currentPositions[imgIndex]
+      const prevPosition = prevPositions[imgIndex]
+
+      const invert = {
+        left: prevPosition.left - currentPosition.left,
+        top: prevPosition.top - currentPosition.top,
       }
-    }
-  }
 
-  return dp[heights.length - 1][mid]
-}
+      const keyframes = [
+        {
+          transform: `translate(${invert.left}px, ${invert.top}px)`,
+        },
+        { transform: "translate(0)" },
+      ]
+
+      const options = {
+        duration: 300,
+        easing: "cubic-bezier(0,0,0.32,1)",
+      }
+
+      const animation = imgRef.animate(keyframes, options)
+    })
+  })
+},
 ```
 
-有了一侧的数组以后，我们只需要在数组中找出另一半，即可渲染到屏幕的两列中：
+## 源码地址
 
-```js
-this.leftImgIndexes = dpHalf(imgHeights).indexes
-this.rightImgIndexes = omitByIndexes(this.imgs, this.leftImgIndexes)
-```
-
-得出效果：
-![](https://user-gold-cdn.xitu.io/2020/6/2/17272def722a4f89?w=628&h=1138&f=png&s=1612372)
-
-### 优化 1
-由于纵轴的每一层的最优解都只需要参考上一层节点的最优解，因此可以只保留两行。通过判断除 2 取余来决定“上一行”的位置。此时空间复杂度是 O(2n)
-
-### 优化 2
-由于每次参考值都只需要取上一行和当前位置左边位置的值（因为减去了当前高度后，剩余高度的最优解一定在左边），因此 dp 数组可以只保留一行，把问题转为从右向左求解，并且在求解的过程中不断覆盖当前的值，而不会影响下一次求解。此时空间复杂度是 O(n)。
-
-并且在这种情况下对于时间复杂度也可以做优化，由于优化后，求当前高度的最优解是倒序遍历的，那么当发现求最优解的高度小于当前所考虑的那个图片的的高度时，说明本次求解不可能考虑当前图片了，此时左边的高度的最优解一定是「上一行的最优解」。
-
-## 代码地址
-[预览地址](https://sl1673495.github.io/dp-waterfall)
-
-[完整代码地址](https://github.com/sl1673495/dp-waterfall/blob/master/index.html)
+https://github.com/sl1673495/flip-animation
 
 ## 总结
 
-算法思想在前端中的应用还是可以见到不少的，本文只是为了演示动态规划在求解最优解问题时的威力，并不代表这种算法适用于生产环境（实际上性能非常差）。
+FLIP 不光可以做位置变化的动画，对于透明度、宽高等等也一样可以很轻松的实现。
 
-在实际场景中我们可能一定需要最优解，而只是需要左右两侧的高度不要相差的过大就好，那么这种情况下简单的贪心算法完全足够。
+比如电商平台中经常会出现一个动画，点击一张商品图片后，商品从它本来的位置慢慢的放大成了一张完整的页面。
 
-在业务工程中，我们需要结合当前的人力资源，项目周期，代码可维护性，性能等各个方面，去选择最适合业务场景的解法，而不一定要去找到那个最优解。
+`FLIP`的思路掌握后，只要你知道元素动画前的状态和元素动画后的状态，你都可以轻松的让它们做一个流畅的动画后到达目的地，并且此时的 DOM 状态是很干净的。
 
-但是算法对于前端来说还是非常重要的，想要写出 bug free 的代码，在复杂的业务场景下也能游刃有余的想出优化复杂度的方法，学习算法是一个非常棒的途径，这也是工程师必备的素养。
+而不是通过硬编码的形式强迫它从 `0, 0` 位移到 `100, 100`。
 
-## 推荐
-
-我维护了一个 LeetCode 的[题解仓库](https://github.com/sl1673495/leetcode-javascript/issues)，这里会按照标签分类记录我平常刷题时遇到的一些比较经典的问题，并且也会经常更新 bobo 老师的力扣算法课程中提到的各个分类的经典算法，把他 C++ 的解法改写成 JavaScript 解法。欢迎关注，我会持续更新。
-
-## 参考资料
-
-[一文搞懂动态规划](https://juejin.im/post/5e86d0ad6fb9a03c387f3342)
-
-[玩转算法面试 从真题到思维全面提升算法思维](https://coding.imooc.com/class/82.html)
-
-## ❤️ 感谢大家
-
-1.如果本文对你有帮助，就点个赞支持下吧，你的「赞」是我创作的动力。
-
-2.关注公众号「前端从进阶到入院」即可加我好友，我拉你进「前端进阶交流群」，大家一起共同交流和进步。
-
-![](https://user-gold-cdn.xitu.io/2020/4/5/17149cbcaa96ff26?w=910&h=436&f=jpeg&s=78195)
+希望这篇文章能让对动画发愁的你有一些收获，谢谢！
