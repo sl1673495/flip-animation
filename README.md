@@ -28,7 +28,7 @@ http://sl1673495.gitee.io/flip-animation
 
 ## FLIP
 
-`FLIP` 究竟是什么东西呢？先看下它的定义，
+`FLIP` 究竟是什么东西呢？先看下它的定义：
 
 ### First
 
