@@ -105,22 +105,24 @@
           async add() {
             const newData = this.getSister()
             await preload(newData)
-            this.scheduleAnimation(
-              () => (this.imgs = newData.concat(this.imgs)),
-            )
+            this.scheduleAnimation(() => {
+              this.imgs = newData.concat(this.imgs)
+            })
           },
           shuffle() {
-            this.scheduleAnimation(() => (this.imgs = shuffle(this.imgs)))
+            this.scheduleAnimation(() => {
+              this.imgs = shuffle(this.imgs)
+            })
           },
-          scheduleAnimation(changeData) {
+          scheduleAnimation(update) {
+            // 获取旧图片的位置
             const prevImgs = this.$refs.imgs.slice()
             const prevSrcRectMap = createSrcRectMap(prevImgs)
-
-            changeData()
-
+            // 更新数据
+            update()
+            // DOM更新后
             this.$nextTick(() => {
               const currentSrcRectMap = createSrcRectMap(prevImgs)
-
               Object.keys(prevSrcRectMap).forEach((src) => {
                 const currentRect = currentSrcRectMap[src]
                 const prevRect = prevSrcRectMap[src]
@@ -129,14 +131,13 @@
                   left: prevRect.left - currentRect.left,
                   top: prevRect.top - currentRect.top,
                 }
-
+                
                 const keyframes = [
                   {
                     transform: `translate(${invert.left}px, ${invert.top}px)`,
                   },
-                  { transform: "translate(0)" },
+                  { transform: "" },
                 ]
-
                 const options = {
                   duration: 300,
                   easing: "cubic-bezier(0,0,0.32,1)",
