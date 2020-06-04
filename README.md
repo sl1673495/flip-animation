@@ -4,15 +4,9 @@
 
 ![](https://user-gold-cdn.xitu.io/2020/6/3/1727890a0a2d9845?w=706&h=682&f=gif&s=1928105)
 
-乍一看，让我们手写出这个逻辑应该是非常复杂的。但是文档里我们发现一个名词：`FLIP`，这给了我们一个线索，是不是用这个玩意就可以写出这个动画呢？
-
-答案是肯定的，顺着这个线索找到 `Aerotwist` 社区里的一篇文章：[flip-your-animations](https://aerotwist.com/blog/flip-your-animations/)，以这篇文章为切入点，一步步来实现一个类似的效果。
-
-图片素材依然引用自知乎问题[《有个漂亮女朋友是种怎样的体验？》](https://www.zhihu.com/question/28997505)，侵删。
+乍一看，让我们手写出这个逻辑应该是非常复杂的，先看看本文最后要实现的效果吧，和这个案例是非常类似的。
 
 ## 预览
-
-先来看看本文想要实现的最终效果是什么样吧：
 
 ![](https://user-gold-cdn.xitu.io/2020/6/3/17278961a474678c?w=500&h=679&f=gif&s=4061003)
 
@@ -20,9 +14,21 @@
 
 http://sl1673495.gitee.io/flip-animation
 
+图片素材依然引用自知乎问题[《有个漂亮女朋友是种怎样的体验？》](https://www.zhihu.com/question/28997505)，侵删。
+
+## 分析需求
+
+拿到了这个需求，第一直觉是怎么做？假设第一行第一个图片移动到了第二行第三列，是不是要计算出第一行的高度，再计算出第二行前两个元素的宽度，然后从初始的坐标点通过 CSS 或者一些动画 API 移动过去？这样做是可以，但是在图片不定高不定宽，并且一次要移动很多图片情况下，这个计算方法就非常复杂了。并且这种情况下，图片的坐标都需要我们手动管理，非常不利于维护和扩展。
+
+换种思路，能不能直接很自然的把 DOM 元素通过原生 API 添加到 DOM 树中，然后让浏览器帮我们好这个终点值，最后我们再动画位移过去？
+
+在文档里我们发现一个名词：`FLIP`，这给了我们一个线索，是不是用这个玩意就可以写出这个动画呢？
+
+答案是肯定的，顺着这个线索找到 `Aerotwist` 社区里的一篇文章：[flip-your-animations](https://aerotwist.com/blog/flip-your-animations/)，以这篇文章为切入点，一步步来实现一个类似的效果。
+
 ## FLIP
 
-`FLIP` 究竟是什么东西呢？先看下它的定义，
+`FLIP` 究竟是什么东西呢？先看下它的定义：
 
 ### First
 
@@ -40,7 +46,7 @@ http://sl1673495.gitee.io/flip-animation
 
 这里有一个关键的知识点要注意了，也是我在之前的文章[《深入解析你不知道的 EventLoop 和浏览器渲染、帧动画、空闲回调》](https://juejin.im/post/5ec73026f265da76da29cb25)中提到过的：
 
-DOM 元素属性的改变（比如 `left`、`right`、 `transform` 等等），会被集中起来延迟到浏览器的下一帧统一渲染，所以我们可以得到一个这样的时间点：**DOM 状态改变了，而浏览器还没渲染**。
+DOM 元素属性的改变（比如 `left`、`right`、 `transform` 等等），会被集中起来延迟到浏览器的下一帧统一渲染，所以我们可以得到一个这样的中间时间点：**DOM 状态（位置信息）改变了，而浏览器还没渲染**。
 
 有了这个前置条件，我们就可以保证先让 Vue 去操作 DOM 变更，此时浏览器还未渲染，我们已经能得到 DOM 状态变更后的位置了。
 
@@ -56,13 +62,16 @@ DOM 元素属性的改变（比如 `left`、`right`、 `transform` 等等），�
 
 ## 实现
 
-首先图片渲染很简单，就让图片通过 `column-count: 4` 简单的排成 4 列即可
+首先图片渲染很简单，就让图片通过简单的排成 4 列即可：
 
 ```xml
 .wrap {
   display: flex;
   flex-wrap: wrap;
-  column-count: 4;
+}
+
+.img {
+  width: 25%;
 }
 
 <div v-else class="wrap">
@@ -83,7 +92,9 @@ async add() {
 }
 ```
 
-首先随机的取出几张图片，利用 `new Image` 进行预加载防止图片空白，然后我们计算当前旧图片的位置：
+首先随机的取出几张图片作为待放入数组的元素，利用 `new Image` 预加载这些图片，防止渲染一堆空白图片到屏幕上。
+
+然后定义一个计算一组 DOM 元素位置的函数 `getRects`，利用 `getBoundingClientRect` 可以获得最新的位置信息，这个方法在接下来获取图片元素旧位置和新位置时都要使用。
 
 ```js
 function getRects(doms) {
@@ -99,7 +110,7 @@ const prevImgs = this.$refs.imgs.slice()
 const prevPositions = getRects(prevImgs)
 ```
 
-记录完图片的旧位置后，就可以向数组里追加新的图片了
+记录完图片的旧位置后，就可以向数组里追加新的图片了：
 
 ```js
 this.imgs = newData.concat(this.imgs)
@@ -121,6 +132,7 @@ async add() {
   this.$nextTick(() => {
     // 再调用同样的方法获取最新的元素位置
     const currentPositions = getRects(prevImgs)
+  })
 },
 ```
 
@@ -151,6 +163,7 @@ prevImgs.forEach((imgRef, imgIndex) => {
     easing: "cubic-bezier(0,0,0.32,1)",
   }
 
+  // 开始运动！
   const animation = imgRef.animate(keyframes, options)
 })
 ```
@@ -214,3 +227,11 @@ FLIP 不光可以做位置变化的动画，对于透明度、宽高等等也一
 而不是通过硬编码的形式强迫它从 `0, 0` 位移到 `100, 100`。
 
 希望这篇文章能让对动画发愁的你有一些收获，谢谢！
+
+## ❤️ 感谢大家
+
+1.如果本文对你有帮助，就点个赞支持下吧，你的「赞」是我创作的动力。
+
+2.关注公众号「前端从进阶到入院」即可加我好友，我拉你进「前端进阶交流群」，大家一起共同交流和进步。
+
+![](https://user-gold-cdn.xitu.io/2020/4/5/17149cbcaa96ff26?w=910&h=436&f=jpeg&s=78195)
