@@ -27,6 +27,10 @@
         text-align: center;
       }
 
+      .action button {
+        margin-right: 8px;
+      }
+
       .link {
         display: block;
         padding: 8px;
@@ -61,7 +65,7 @@
     <div id="app" v-cloak>
       <div class="action">
         <button @click="add">追加图片</button>
-        <button @click="shuffle">乱序</button>
+        <button @click="shuffle">乱序图片</button>
         <button @click="reset">重置</button>
       </div>
       <div v-if="loading" class="loading">正在加载图片……</div>
@@ -101,22 +105,29 @@
           async add() {
             const newData = this.getSister()
             await preload(newData)
-
+            this.scheduleAnimation(
+              () => (this.imgs = newData.concat(this.imgs)),
+            )
+          },
+          shuffle() {
+            this.scheduleAnimation(() => (this.imgs = shuffle(this.imgs)))
+          },
+          scheduleAnimation(changeData) {
             const prevImgs = this.$refs.imgs.slice()
-            const prevPositions = getRects(prevImgs)
+            const prevSrcRectMap = createSrcRectMap(prevImgs)
 
-            this.imgs = newData.concat(this.imgs)
+            changeData()
 
             this.$nextTick(() => {
-              const currentPositions = getRects(prevImgs)
+              const currentSrcRectMap = createSrcRectMap(prevImgs)
 
-              prevImgs.forEach((imgRef, imgIndex) => {
-                const currentPosition = currentPositions[imgIndex]
-                const prevPosition = prevPositions[imgIndex]
+              Object.keys(prevSrcRectMap).forEach((src) => {
+                const currentRect = currentSrcRectMap[src]
+                const prevRect = prevSrcRectMap[src]
 
                 const invert = {
-                  left: prevPosition.left - currentPosition.left,
-                  top: prevPosition.top - currentPosition.top,
+                  left: prevRect.left - currentRect.left,
+                  top: prevRect.top - currentRect.top,
                 }
 
                 const keyframes = [
@@ -131,12 +142,9 @@
                   easing: "cubic-bezier(0,0,0.32,1)",
                 }
 
-                const animation = imgRef.animate(keyframes, options)
+                const animation = currentRect.img.animate(keyframes, options)
               })
             })
-          },
-          shuffle() {
-
           },
           reset() {
             this.getSister = getSisterGenerator()
@@ -145,12 +153,13 @@
         },
       })
 
-      function getRects(doms) {
-        return doms.map((dom) => {
-          const rect = dom.getBoundingClientRect()
+      function createSrcRectMap(imgs) {
+        return imgs.reduce((prev, img) => {
+          const rect = img.getBoundingClientRect()
           const { left, top } = rect
-          return { left, top }
-        })
+          prev[img.src] = { left, top, img }
+          return prev
+        }, {})
       }
     </script>
   </body>
