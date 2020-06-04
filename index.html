@@ -64,7 +64,10 @@
   <body>
     <div id="app" v-cloak>
       <div class="action">
-        <button @click="add">追加图片</button>
+        <button @click="add">
+          <span v-show="adding">下载中……</span>
+          <span v-show="!adding">追加图片</span>
+        </button>
         <button @click="shuffle">乱序图片</button>
         <button @click="reset">重置</button>
       </div>
@@ -85,6 +88,7 @@
         el: "#app",
         data() {
           return {
+            adding: false,
             loading: false,
             getSister: initialGetSister,
             imgs: [],
@@ -103,8 +107,15 @@
         },
         methods: {
           async add() {
+            if (this.adding) {
+              return
+            }
+
+            this.adding = true
             const newData = this.getSister()
             await preload(newData)
+            this.adding = false
+
             this.scheduleAnimation(() => {
               this.imgs = newData.concat(this.imgs)
             })
@@ -131,7 +142,7 @@
                   left: prevRect.left - currentRect.left,
                   top: prevRect.top - currentRect.top,
                 }
-                
+
                 const keyframes = [
                   {
                     transform: `translate(${invert.left}px, ${invert.top}px)`,
