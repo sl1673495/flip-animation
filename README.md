@@ -212,6 +212,71 @@ async add() {
 },
 ```
 
+## 乱序
+
+现在我们想要实现官网demo中的乱序效果，有了追加图片逻辑的铺垫，是不是已经觉得思路如泉涌了？没错，即使图片被打乱的再厉害，只要我们有「图片开始时的位置」和「图片结束时的位置」，那就可以轻松做到路径动画。
+
+现在我们需要做的是把动画的逻辑抽离出来，我们分析一下整条链路：
+
+`保存旧位置 -> 改变数据驱动视图更新 -> 获得新位置 -> 利用 FLIP 做动画`
+
+好，那么很简单了，外部只需要传入一个 `update` 函数告诉我们如何去更新图片数组，我们就可以把这个逻辑完全抽象到一个函数里去。
+
+```js
+scheduleAnimation(update) {
+  // 获取旧图片的位置
+  const prevImgs = this.$refs.imgs.slice()
+  const prevSrcRectMap = createSrcRectMap(prevImgs)
+  // 更新数据
+  update()
+  // DOM更新后
+  this.$nextTick(() => {
+    const currentSrcRectMap = createSrcRectMap(prevImgs)
+    Object.keys(prevSrcRectMap).forEach((src) => {
+      const currentRect = currentSrcRectMap[src]
+      const prevRect = prevSrcRectMap[src]
+
+      const invert = {
+        left: prevRect.left - currentRect.left,
+        top: prevRect.top - currentRect.top,
+      }
+      
+      const keyframes = [
+        {
+          transform: `translate(${invert.left}px, ${invert.top}px)`,
+        },
+        { transform: "" },
+      ]
+      const options = {
+        duration: 300,
+        easing: "cubic-bezier(0,0,0.32,1)",
+      }
+
+      const animation = currentRect.img.animate(keyframes, options)
+    })
+  })
+}
+```
+
+那么追加图片和乱序的函数就变得非常简单了：
+
+```js
+// 追加图片
+async add() {
+  const newData = this.getSister()
+  await preload(newData)
+  this.scheduleAnimation(() => {
+    this.imgs = newData.concat(this.imgs)
+  })
+},
+// 乱序图片
+shuffle() {
+  this.scheduleAnimation(() => {
+    this.imgs = shuffle(this.imgs)
+  })
+}
+```
+
 ## 源码地址
 
 https://github.com/sl1673495/flip-animation
