@@ -41,7 +41,7 @@ function getSisterGenerator() {
       initial = false
       return source.splice(0, initialSize)
     }
-    const size = getRandomInt(0, randomSize.length - 1
+    const size = getRandomInt(0, randomSize.length - 1)
     return source.splice(0, randomSize[size])
   }
 }
