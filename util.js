@@ -10,7 +10,7 @@ let preload = (imgs) => {
           resolve()
         }
       }
-      
+
       img.onload = checkIfFinished
       img.onerror = checkIfFinished
 
@@ -18,4 +18,20 @@ let preload = (imgs) => {
     }
     imgs.forEach(load)
   })
+}
+
+let getRandomInt = (min, max) => {
+  return Math.floor(Math.random() * (max - min + 1) + min)
+}
+
+// by ustbhuangyi
+let shuffle = (arr) => {
+  let ret = arr.slice()
+  for (let i = 0; i < ret.length; i++) {
+    let j = getRandomInt(0, i)
+    let t = ret[i]
+    ret[i] = ret[j]
+    ret[j] = t
+  }
+  return ret
 }

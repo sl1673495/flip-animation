@@ -61,6 +61,7 @@
     <div id="app" v-cloak>
       <div class="action">
         <button @click="add">追加图片</button>
+        <button @click="shuffle">乱序</button>
         <button @click="reset">重置</button>
       </div>
       <div v-if="loading" class="loading">正在加载图片……</div>
@@ -71,8 +72,8 @@
       </div>
     </div>
     <script src="./vue.js"></script>
-    <script src="./mock.js"></script>
     <script src="./util.js"></script>
+    <script src="./mock.js"></script>
     <script>
       let initialGetSister = getSisterGenerator()
       new Vue({
@@ -132,6 +133,9 @@
                 const animation = imgRef.animate(keyframes, options)
               })
             })
+          },
+          shuffle() {
+
           },
           reset() {
             this.getSister = getSisterGenerator()
