@@ -283,13 +283,62 @@ https://github.com/sl1673495/flip-animation
 
 ## 总结
 
+### FLIP
+
 FLIP 不光可以做位置变化的动画，对于透明度、宽高等等也一样可以很轻松的实现。
 
 比如电商平台中经常会出现一个动画，点击一张商品图片后，商品从它本来的位置慢慢的放大成了一张完整的页面。
 
-`FLIP`的思路掌握后，只要你知道元素动画前的状态和元素动画后的状态，你都可以轻松的让它们做一个流畅的动画后到达目的地，并且此时的 DOM 状态是很干净的。
+`FLIP`的思路掌握后，只要你知道元素动画前的状态和元素动画后的状态，你都可以轻松的通过「倒置状态」后，让它们做一个流畅的动画后到达目的地，并且此时的 DOM 状态是很干净的，而不是通过大量计算的方式强迫它从 `0, 0` 位移到 `100, 100`，并且让 DOM 样式上留下 `transform: translate(100px, 100px)` 类似的字样。
 
-而不是通过硬编码的形式强迫它从 `0, 0` 位移到 `100, 100`。
+### Web Animation
+
+利用 `Web Animation API` 可以让我们用 JavaScript 更加直观的描述我们需要元素去做的动画，想象一下这个需求如果用 CSS 来做，我们大概会这样去完成这个需求：
+
+```js
+const currentImgStyle = currentRect.img.style
+currentImgStyle.transform = `translate(${invert.left}px, ${invert.top}px)`
+currentImgStyle.transitionDuration = "0s"
+
+this._reflow = document.body.offsetHeight
+
+currentRect.img.classList.add("move")
+
+currentImgStyle.transform = currentRect.img.style.WebkitTransform = currentRect.img.style.transitionDuration =
+  ""
+
+currentRect.img.addEventListener("transitionend", () => {
+  currentRect.img.classList.remove("move")
+})
+```
+
+这也是 Vue 内部 `transition-group` 组件实现 `FLIP` 动画的大致思路，这段代码让我觉得不舒服的点在于：
+
+1. 需要通过 `class` 的增加和删除来和 CSS 来进行交互，整体流程不太符合直觉。
+2. 需要监听动画完成事件，并且做一些清理操作，容易遗漏。
+3. 需要利用 `document.body.offsetHeight` 这样的方式触发 `强制同步布局`，比较 hack 的知识点。
+4. 需要利用 `this._reflow = document.body.offsetHeight` 这样的方式向元素实例上增加一个没有意义的属性，防止被 Rollup 等打包工具 `tree-shaking` 误删。 比较 hack 的知识点 +1。
+
+而利用 `Web Animation API` 的代码则变得非常符合直觉和易于维护：
+
+```js
+const keyframes = [
+  {
+    transform: `translate(${invert.left}px, ${invert.top}px)`,
+  },
+  { transform: "" },
+]
+const options = {
+  duration: 300,
+  easing: "cubic-bezier(0,0,0.32,1)",
+}
+
+const animation = currentRect.img.animate(keyframes, options)
+```
+
+关于兼容性问题，W3C 已经提供了 [`Web Animation API Polyfill`](https://github.com/web-animations/web-animations-js)，可以放心大胆的使用。
+
+期待在不久的未来，我们可以抛弃旧的动画模式，迎接这种更新更好的 API。
 
 希望这篇文章能让对动画发愁的你有一些收获，谢谢！
 
