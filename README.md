@@ -8,7 +8,8 @@
 
 ## 预览
 
-![](https://user-gold-cdn.xitu.io/2020/6/3/17278961a474678c?w=500&h=679&f=gif&s=4061003)
+![](https://user-gold-cdn.xitu.io/2020/6/5/1728224def433610?w=600&h=676&f=gif&s=4131884)
+
 
 也可以直接进预览网址里看：
 
@@ -304,15 +305,14 @@ this._reflow = document.body.offsetHeight
 
 currentRect.img.classList.add("move")
 
-currentImgStyle.transform = currentRect.img.style.WebkitTransform = currentRect.img.style.transitionDuration =
-  ""
+currentImgStyle.transform = currentRect.img.style.transitionDuration = ""
 
 currentRect.img.addEventListener("transitionend", () => {
   currentRect.img.classList.remove("move")
 })
 ```
 
-这也是 Vue 内部 `transition-group` 组件实现 `FLIP` 动画的大致思路，这段代码让我觉得不舒服的点在于：
+这是还是选择用比较原生的方式去控制 CSS 样式实现的 FLIP 动画，这段代码让我觉得不舒服的点在于：
 
 1. 需要通过 `class` 的增加和删除来和 CSS 来进行交互，整体流程不太符合直觉。
 2. 需要监听动画完成事件，并且做一些清理操作，容易遗漏。
